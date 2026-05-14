@@ -9,7 +9,7 @@ function fileToBase64(blob: Blob): Promise<string> {
     const reader = new FileReader();
     reader.onload = () => {
       const result = reader.result as string;
-      // Strip data URL prefix to get raw base64
+      // Strip the data URL prefix to get raw base64
       resolve(result.split(',')[1]);
     };
     reader.onerror = () => reject(new Error('Failed to read file'));
@@ -17,8 +17,52 @@ function fileToBase64(blob: Blob): Promise<string> {
   });
 }
 
+/** Yield control back to the browser between heavy canvas operations. */
+function yieldToMain(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/**
+ * Encode a canvas to a JPEG base64 string guaranteed to stay under
+ * Vercel's 4.5 MB serverless function request-body hard limit.
+ *
+ * Strategy:
+ *   1. Try progressively lower JPEG quality (0.85 → 0.75 → 0.65 → 0.55).
+ *   2. If quality alone is not enough, proportionally shrink the canvas
+ *      and re-encode at quality 0.80.
+ *
+ * Target ceiling: 4 MB of base64 (leaves ~0.5 MB for JSON envelope overhead).
+ */
+function canvasToBase64UnderLimit(canvas: HTMLCanvasElement): string {
+  const MAX_BASE64_LENGTH = 4 * 1024 * 1024; // 4 MB
+
+  // Step 1 — reduce JPEG quality in steps
+  for (const quality of [0.85, 0.75, 0.65, 0.55]) {
+    const dataUrl = canvas.toDataURL('image/jpeg', quality);
+    const base64 = dataUrl.split(',')[1];
+    if (base64.length <= MAX_BASE64_LENGTH) return base64;
+  }
+
+  // Step 2 — quality alone wasn't enough; scale the canvas down.
+  // Calculate the linear scale factor from the base64 length ratio,
+  // then apply a 5 % safety margin.
+  const oversizeDataUrl = canvas.toDataURL('image/jpeg', 0.55);
+  const oversizeBase64 = oversizeDataUrl.split(',')[1];
+  const factor = Math.sqrt(MAX_BASE64_LENGTH / oversizeBase64.length) * 0.95;
+
+  const scaled = document.createElement('canvas');
+  scaled.width = Math.floor(canvas.width * factor);
+  scaled.height = Math.floor(canvas.height * factor);
+  const sCtx = scaled.getContext('2d')!;
+  sCtx.fillStyle = '#ffffff';
+  sCtx.fillRect(0, 0, scaled.width, scaled.height);
+  sCtx.drawImage(canvas, 0, 0, scaled.width, scaled.height);
+
+  return scaled.toDataURL('image/jpeg', 0.80).split(',')[1];
+}
+
 async function pdfPageToBase64(file: File): Promise<string> {
-  // Dynamically import pdfjs to keep bundle lean
+  // Dynamically import pdfjs to keep the main bundle lean
   const pdfjsLib = await import('pdfjs-dist');
   pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
     'pdfjs-dist/build/pdf.worker.mjs',
@@ -28,14 +72,18 @@ async function pdfPageToBase64(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
-  // Render all pages and stitch them vertically
+  // 1.5× gives AI models enough resolution to read menu text clearly.
+  // 2.0× can produce a payload that hits Vercel's 4.5 MB body limit even
+  // for single-page PDFs with dense image content.
+  const scale = 1.5;
+
   const canvases: HTMLCanvasElement[] = [];
   let totalHeight = 0;
   let maxWidth = 0;
 
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
     const page = await pdf.getPage(pageNum);
-    const viewport = page.getViewport({ scale: 2.0 }); // 2x for quality
+    const viewport = page.getViewport({ scale });
 
     const canvas = document.createElement('canvas');
     canvas.width = viewport.width;
@@ -47,9 +95,12 @@ async function pdfPageToBase64(file: File): Promise<string> {
     canvases.push(canvas);
     totalHeight += viewport.height;
     maxWidth = Math.max(maxWidth, viewport.width);
+
+    // Yield after each page so the UI stays responsive
+    await yieldToMain();
   }
 
-  // Merge pages into a single canvas
+  // Merge all pages into one tall canvas
   const merged = document.createElement('canvas');
   merged.width = maxWidth;
   merged.height = totalHeight;
@@ -61,11 +112,12 @@ async function pdfPageToBase64(file: File): Promise<string> {
   for (const c of canvases) {
     mCtx.drawImage(c, 0, yOffset);
     yOffset += c.height;
+    // Yield between draws to avoid a long uninterrupted paint task
+    await yieldToMain();
   }
 
-  // Return as base64 JPEG
-  const dataUrl = merged.toDataURL('image/jpeg', 0.92);
-  return dataUrl.split(',')[1];
+  // Encode to JPEG, adaptively compressing to stay under Vercel's body limit
+  return canvasToBase64UnderLimit(merged);
 }
 
 export async function processFile(file: File): Promise<ProcessedFile> {
@@ -73,11 +125,13 @@ export async function processFile(file: File): Promise<ProcessedFile> {
   const isImage = file.type.startsWith('image/');
 
   if (!isPdf && !isImage) {
-    throw new Error(`Unsupported file type: ${file.type}. Please upload an image (JPG, PNG, WEBP) or PDF.`);
+    throw new Error(
+      `Unsupported file type: ${file.type}. Please upload an image (JPG, PNG, WEBP) or PDF.`
+    );
   }
 
   if (file.size > 20 * 1024 * 1024) {
-    throw new Error('File size exceeds 20MB limit. Please use a smaller file.');
+    throw new Error('File size exceeds 20 MB limit. Please use a smaller file.');
   }
 
   if (isPdf) {

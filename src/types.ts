@@ -42,6 +42,8 @@ export interface FileItem {
   status: FileItemStatus;
   menu: MenuData | null;
   menuV2: MenuDataV2 | null;
+  /** Data URL of the processed image — JPEG for PDFs, original mime for images. Null until extraction succeeds. */
+  previewUrl: string | null;
   error: string | null;
 }
 

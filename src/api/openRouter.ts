@@ -1,19 +1,11 @@
 import type { MenuData, MenuDataV2 } from '../types';
-import {
-  MENU_EXTRACTION_SYSTEM_PROMPT,
-  MENU_EXTRACTION_SYSTEM_PROMPT_V2,
-} from './systemPrompt';
-
-const API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY as string;
-const MODEL_ID =
-  (import.meta.env.VITE_OPENROUTER_MODEL_ID as string) || 'anthropic/claude-haiku-4-5';
 
 // ─── Delay between sequential V1 → V2 calls (ms) ────────────────────────────
 const INTER_CALL_DELAY_MS = 1000;
 
 // ─── Retry config ────────────────────────────────────────────────────────────
 const MAX_RETRIES = 3;
-const RETRY_BASE_DELAY_MS = 2000; // doubles each attempt: 2s, 4s, 8s
+const RETRY_BASE_DELAY_MS = 2000; // doubles each attempt: 2s → 4s → 8s
 
 export class OpenRouterError extends Error {
   constructor(
@@ -44,18 +36,14 @@ function isRetryableStatus(status: number): boolean {
   return status === 429 || (status >= 500 && status <= 599);
 }
 
-// ─── Core fetch with retry + exponential backoff ──────────────────────────────
-async function callOpenRouter(
+// ─── Core fetch — calls the server proxy; API key never leaves the server ────
+// Sends `format` ('v1' | 'v2') instead of the raw system prompt so the client
+// cannot inject arbitrary prompts or abuse the proxied API key.
+async function callProxy(
   base64Image: string,
   mimeType: string,
-  systemPrompt: string
+  format: 'v1' | 'v2'
 ): Promise<string> {
-  if (!API_KEY) {
-    throw new OpenRouterError(
-      'Missing VITE_OPENROUTER_API_KEY environment variable. Please add it to your .env file.'
-    );
-  }
-
   let lastError: OpenRouterError | null = null;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -66,35 +54,10 @@ async function callOpenRouter(
 
     let response: Response;
     try {
-      response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      response = await fetch('/api/extract', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${API_KEY}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': window.location.origin,
-          'X-Title': 'AI Menu Extractor',
-        },
-        body: JSON.stringify({
-          model: MODEL_ID,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'image_url',
-                  image_url: { url: `data:${mimeType};base64,${base64Image}` },
-                },
-                {
-                  type: 'text',
-                  text: 'Extract all menu items from this image and return the structured JSON.',
-                },
-              ],
-            },
-          ],
-          temperature: 0.1,
-          max_tokens: 30720,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64Image, mimeType, format }),
       });
     } catch (networkErr) {
       lastError = new OpenRouterError(
@@ -104,38 +67,36 @@ async function callOpenRouter(
     }
 
     if (!response.ok) {
-      const errorBody = await response.text().catch(() => 'Unknown error');
+      const errorBody = await response
+        .json()
+        .then((j: { error?: string }) => j.error ?? 'Unknown error')
+        .catch(() => 'Unknown error');
+
       if (isRetryableStatus(response.status)) {
         lastError = new OpenRouterError(
-          `OpenRouter API error (${response.status}): ${errorBody}`,
+          `API error (${response.status}): ${errorBody}`,
           response.status
         );
         continue;
       }
+
       throw new OpenRouterError(
-        `OpenRouter API error (${response.status}): ${errorBody}`,
+        `API error (${response.status}): ${errorBody}`,
         response.status
       );
     }
 
-    const data = (await response.json()) as {
-      choices: Array<{ message: { content: string } }>;
-      error?: { message: string };
-    };
+    const data = await response.json() as { result?: string; error?: string };
 
     if (data.error) {
-      throw new OpenRouterError(data.error.message);
+      throw new OpenRouterError(data.error);
     }
 
-    const rawContent = data.choices?.[0]?.message?.content;
-    if (!rawContent) {
-      throw new OpenRouterError('Empty response from AI model.');
+    if (!data.result) {
+      throw new OpenRouterError('Empty response from proxy.');
     }
 
-    return rawContent
-      .replace(/```json\s*/gi, '')
-      .replace(/```\s*/g, '')
-      .trim();
+    return data.result;
   }
 
   throw lastError ?? new OpenRouterError('Request failed after maximum retries.');
@@ -143,7 +104,7 @@ async function callOpenRouter(
 
 // ─── V1 extraction ────────────────────────────────────────────────────────────
 async function extractV1(base64Image: string, mimeType: string): Promise<MenuData> {
-  const cleaned = await callOpenRouter(base64Image, mimeType, MENU_EXTRACTION_SYSTEM_PROMPT);
+  const cleaned = await callProxy(base64Image, mimeType, 'v1');
   try {
     const parsed = JSON.parse(cleaned) as MenuData;
     if (!Array.isArray(parsed)) throw new Error('Response is not an array');
@@ -155,7 +116,7 @@ async function extractV1(base64Image: string, mimeType: string): Promise<MenuDat
 
 // ─── V2 extraction ────────────────────────────────────────────────────────────
 async function extractV2(base64Image: string, mimeType: string): Promise<MenuDataV2> {
-  const cleaned = await callOpenRouter(base64Image, mimeType, MENU_EXTRACTION_SYSTEM_PROMPT_V2);
+  const cleaned = await callProxy(base64Image, mimeType, 'v2');
   try {
     const parsed = JSON.parse(cleaned) as MenuDataV2;
     if (!Array.isArray(parsed)) throw new Error('Response is not an array');

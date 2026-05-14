@@ -19,6 +19,7 @@ function makeFileItem(file: File): FileItem {
     status: 'pending',
     menu: null,
     menuV2: null,
+    previewUrl: null,
     error: null,
   };
 }
@@ -111,6 +112,12 @@ export default function App() {
 
       try {
         const processed = await processFile(item.file);
+
+        // Build the preview data URL from the already-processed base64.
+        // For images this is the original file encoded; for PDFs it is the
+        // rendered JPEG that fileProcessor already produced — no extra work.
+        const previewUrl = `data:${processed.mimeType};base64,${processed.base64}`;
+
         const { menu, menuV2 } = await extractMenuBoth(
           processed.base64,
           processed.mimeType,
@@ -120,7 +127,9 @@ export default function App() {
         setState((prev) => ({
           ...prev,
           files: prev.files.map((f) =>
-            f.id === item.id ? { ...f, status: 'success' as const, menu, menuV2 } : f
+            f.id === item.id
+              ? { ...f, status: 'success' as const, menu, menuV2, previewUrl }
+              : f
           ),
         }));
       } catch (err) {
@@ -170,6 +179,25 @@ export default function App() {
 
   const handleReset = useCallback(() => {
     setState(INITIAL_STATE);
+  }, []);
+
+  // ─── Inline edit callbacks ─────────────────────────────────────────────────
+  const handleUpdateFileMenu = useCallback((fileId: string, updatedMenu: MenuData) => {
+    setState((prev) => ({
+      ...prev,
+      files: prev.files.map((f) =>
+        f.id === fileId ? { ...f, menu: updatedMenu } : f
+      ),
+    }));
+  }, []);
+
+  const handleUpdateFileMenuV2 = useCallback((fileId: string, updatedMenuV2: MenuDataV2) => {
+    setState((prev) => ({
+      ...prev,
+      files: prev.files.map((f) =>
+        f.id === fileId ? { ...f, menuV2: updatedMenuV2 } : f
+      ),
+    }));
   }, []);
 
   // ─── Derived state ─────────────────────────────────────────────────────────
@@ -382,6 +410,8 @@ export default function App() {
                   showMerged={successCount > 1}
                   enableJson={enableJson}
                   enableJsonV2={enableJsonV2}
+                  onUpdateFileMenu={handleUpdateFileMenu}
+                  onUpdateFileMenuV2={handleUpdateFileMenuV2}
                 />
               </div>
             )}

@@ -341,7 +341,6 @@ body {
   position: relative;
 }
 
-/* Fade edges hint that more tabs are offscreen */
 .menu-header::before,
 .menu-header::after {
   content: '';
@@ -368,15 +367,11 @@ body {
   padding: 8px 10px;
   box-sizing: border-box;
 }
-
-/* ─── Swiper wrapper (the scrolling row) ─────────── */
 .menu-tabs-swiper .swiper-wrapper {
   display: flex;
   align-items: center;
   gap: 2px;
 }
-
-/* ─── Individual slide shell ─────────────────────── */
 .menu-tab-slide {
   width: auto !important;
   flex-shrink: 0;
@@ -473,6 +468,61 @@ body {
 }
 .tab-btn:hover:not(.active) { color: var(--ink-2); }
 
+/* ─── Split content area ─────────────────────────── */
+.menu-content-area {
+  display: flex;
+  flex-direction: row;
+}
+
+/* Left panel: scrollable source image */
+.source-split-panel {
+  width: 50%;
+  flex-shrink: 0;
+  border-right: 1.5px solid var(--border);
+  max-height: 560px;
+  overflow-y: auto;
+  background: #ffffff;
+}
+.source-split-panel::-webkit-scrollbar { width: 5px; }
+.source-split-panel::-webkit-scrollbar-track { background: transparent; }
+.source-split-panel::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+
+/* Right panel: extracted data */
+.content-split-panel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Source image elements */
+.source-image-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+.source-image-wrapper + .source-image-wrapper {
+  border-top: 2px solid #e0e0e0;
+}
+
+/* Filename label — visible only in merged multi-image view */
+.source-image-label {
+  padding: 5px 12px;
+  font-size: 11px;
+  color: #666;
+  background: #f5f5f5;
+  border-bottom: 1px solid #e0e0e0;
+  font-family: 'DM Mono', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-image {
+  width: 100%;
+  display: block;
+  object-fit: contain;
+}
+
 /* ─── Category Blocks ──────────────────────────── */
 .menu-categories {
   padding: 8px 0;
@@ -505,10 +555,22 @@ body {
   gap: 16px;
   padding: 9px 10px;
   border-radius: var(--radius-sm);
-  transition: background 0.15s;
+  transition: background 0.15s, box-shadow 0.15s;
 }
 .entry-row:hover { background: var(--surface-2); }
+.entry-row.drop-before {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+.entry-row.drop-after {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
 .entry-info { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.entry-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
 .entry-title { font-size: 13.5px; font-weight: 500; color: var(--ink); line-height: 1.3; }
 .entry-desc { font-size: 12px; color: var(--ink-3); line-height: 1.5; font-weight: 300; }
 .entry-price {
@@ -537,12 +599,24 @@ body {
 /* ─── Menu Footer ──────────────────────────────── */
 .menu-footer {
   padding: 12px 18px;
+  min-height: 56px;
   border-top: 1.5px solid var(--border);
   background: var(--surface-2);
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
 }
-.copy-btn {
+.menu-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.menu-footer-actions-right {
+  justify-content: flex-end;
+  margin-left: auto;
+}
+.menu-action-btn {
   display: flex;
   align-items: center;
   gap: 7px;
@@ -557,7 +631,7 @@ body {
   cursor: pointer;
   transition: background 0.2s, border-color 0.2s;
 }
-.copy-btn:hover { background: var(--accent); border-color: var(--accent); }
+.menu-action-btn:hover { background: var(--accent); border-color: var(--accent); }
 
 /* ─── Done Actions ──────────────────────────────── */
 .done-actions { display: flex; justify-content: center; }
@@ -594,9 +668,7 @@ body {
 }
 
 /* ─── Compact upload zone ────────────────────────── */
-.upload-zone.compact {
-  max-width: 100%;
-}
+.upload-zone.compact { max-width: 100%; }
 
 /* ─── Extract panel ──────────────────────────────── */
 .extract-panel {
@@ -632,10 +704,7 @@ body {
   height: 0;
   pointer-events: none;
 }
-.format-toggle {
-  cursor: pointer;
-  user-select: none;
-}
+.format-toggle { cursor: pointer; user-select: none; }
 .format-toggle-pill {
   display: inline-flex;
   align-items: center;
@@ -663,9 +732,7 @@ body {
   border-color: var(--accent);
   color: var(--accent);
 }
-.format-toggle.enabled .format-toggle-dot {
-  background: var(--accent);
-}
+.format-toggle.enabled .format-toggle-dot { background: var(--accent); }
 .format-toggle:hover .format-toggle-pill {
   border-color: var(--accent);
   color: var(--ink-2);
@@ -701,4 +768,229 @@ body {
   .upload-zone { padding: 36px 18px; }
   .menu-view-meta { gap: 8px; }
   .tab-buttons { margin-left: 0; }
+
+  /* Stack image above content on small screens */
+  .menu-content-area.split-layout {
+    flex-direction: column;
+  }
+  .source-split-panel {
+    width: 100%;
+    max-height: 280px;
+    border-right: none;
+    border-bottom: 1.5px solid var(--border);
+  }
+}
+
+/* ─── Inline Editor ───────────────────────────────────────────────────────── */
+
+/* Display span — shows hover affordance so users know it's clickable */
+.editable-span {
+  cursor: text;
+  border-radius: 3px;
+  padding: 1px 3px;
+  margin: -1px -3px;
+  transition: background 0.15s, outline-color 0.15s;
+  outline: 1.5px solid transparent;
+  display: inline-block;
+  min-width: 24px;
+}
+.editable-span:hover {
+  background: var(--surface-3);
+  outline-color: var(--border-2);
+}
+.editable-span.is-placeholder {
+  color: var(--ink-3);
+  font-style: italic;
+}
+
+/* Active input / textarea */
+.editable-input {
+  background: var(--surface-3);
+  border: 1.5px solid var(--accent);
+  border-radius: 4px;
+  padding: 2px 6px;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  width: 100%;
+  outline: none;
+  resize: none;
+  display: block;
+}
+.editable-input.multiline {
+  resize: vertical;
+  min-height: 42px;
+  scrollbar-color: var(--surface-3) transparent;
+}
+.editable-input.multiline::-webkit-scrollbar {
+  width: 5px;
+}
+.editable-input.multiline::-webkit-scrollbar-track {
+  background: transparent;
+}
+.editable-input.multiline::-webkit-scrollbar-thumb {
+  background: var(--surface-3);
+  border-radius: 3px;
+}
+.editable-span.entry-price,
+.editable-input.entry-price {
+  width: 6ch;
+  min-width: 6ch;
+  text-align: right;
+}
+
+/* ─── Editable entry row ─────────────────────────────────────────────────── */
+.entry-row.editable {
+  align-items: flex-start;
+  gap: 10px;
+}
+
+/* Groups price + delete button on the right */
+.entry-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+
+/* Delete item button — hidden until row is hovered */
+.drag-handle-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--ink-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.drag-handle-btn:hover {
+  background: var(--surface-3);
+  color: var(--accent);
+}
+.drag-handle-btn:active {
+  cursor: grabbing;
+}
+.delete-entry-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--ink-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.entry-row.editable:hover .delete-entry-btn { opacity: 1; }
+.delete-entry-btn:hover {
+  background: var(--red-dim);
+  color: var(--red);
+}
+
+/* Add item button at the bottom of each category */
+.add-entry-btn {
+  display: block;
+  width: calc(100% - 20px);
+  margin: 6px 10px 4px;
+  padding: 5px 12px;
+  background: transparent;
+  border: 1px dashed var(--border-2);
+  border-radius: var(--radius-sm);
+  color: var(--ink-3);
+  font-size: 12px;
+  font-family: 'DM Sans', sans-serif;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.add-entry-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ─── Editable category header ───────────────────────────────────────────── */
+.category-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.category-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.category-header .category-title,
+.category-header .editable-span.category-title {
+  margin-bottom: 0;
+  flex: 1;
+  min-width: 0;
+}
+.category-copy-btn {
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-2);
+  background: var(--surface-3);
+  color: var(--ink-2);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.category-copy-btn:hover {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Delete category button — hidden until category block is hovered */
+.delete-category-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--ink-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.category-block:hover .delete-category-btn { opacity: 1; }
+.delete-category-btn:hover {
+  background: var(--red-dim);
+  color: var(--red);
+}
+
+/* ─── Edit mode hint badge in meta bar ───────────────────────────────────── */
+.edit-hint-badge {
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border: 1px solid rgba(232,103,58,0.3);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-family: 'DM Mono', monospace;
+  white-space: nowrap;
 }
