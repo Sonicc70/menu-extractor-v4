@@ -15,8 +15,8 @@ Upload a photo or PDF scan of any restaurant menu and instantly extract all item
    ```
    Edit `.env` and add your [OpenRouter](https://openrouter.ai) API key:
    ```
-   VITE_OPENROUTER_API_KEY=your_api_key_here
-   VITE_OPENROUTER_MODEL_ID=anthropic/claude-haiku-4-5
+   OPENROUTER_API_KEY=your_api_key_here
+   OPENROUTER_MODEL_ID=anthropic/claude-haiku-4-5
    ```
 
 3. **Run the dev server**
